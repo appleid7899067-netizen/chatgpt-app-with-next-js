@@ -8,7 +8,8 @@ type Message = { role: "user" | "assistant"; content: string };
 type ModelMode = "puter" | "puter-codex" | "puter-luna" | "codex";
 type RetryRequest = { messages: Message[]; mode: ModelMode };
 type BackendStatus = "checking" | "online" | "offline";
-type TerminalEntry = { command: string; output: string };
+type TerminalBackend = "e2b" | "termux";
+type TerminalEntry = { command: string; output: string; backend: TerminalBackend };
 
 declare global {
   interface Window {
@@ -72,15 +73,33 @@ const e2bTools = [{
   },
 }];
 
-async function getPuterReplyWithTools(conversation: Message[], model: string) {
+const termuxTools = [{
+  type: "function",
+  function: {
+    name: "run_termux_terminal",
+    description: "Run one risk-checked shell command on the user's Android Termux device through its local MCP server. This is the real device environment, not an isolated sandbox. Do not use destructive commands unless the user explicitly requests them.",
+    parameters: {
+      type: "object",
+      properties: { command: { type: "string", description: "A shell command up to 2000 characters" } },
+      required: ["command"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+}];
+
+async function getPuterReplyWithTools(conversation: Message[], model: string, terminalBackend: TerminalBackend) {
   if (!window.puter) throw new Error("Puter.js ยังโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง");
   const history: unknown[] = conversation.map(({ role, content }) => ({ role, content }));
+  const tools = terminalBackend === "termux" ? termuxTools : e2bTools;
+  const toolName = terminalBackend === "termux" ? "run_termux_terminal" : "run_e2b_terminal";
+  const endpoint = terminalBackend === "termux" ? "/api/termux" : "/api/e2b";
 
   for (let round = 0; round < 3; round += 1) {
     const result = await window.puter.ai.chat(history as Message[], false, {
       normalize: true,
       model,
-      tools: e2bTools,
+      tools,
     });
     const toolCalls = getPuterToolCalls(result);
     if (toolCalls.length === 0) {
@@ -95,13 +114,13 @@ async function getPuterReplyWithTools(conversation: Message[], model: string) {
     history.push(result.message);
 
     for (const call of toolCalls) {
-      if (call.name !== "run_e2b_terminal") throw new Error("โมเดลขอเรียก tool ที่ไม่รองรับ");
+      if (call.name !== toolName) throw new Error("โมเดลขอเรียก tool ที่ไม่รองรับ");
       let args: unknown;
       try { args = JSON.parse(call.arguments); } catch { throw new Error("โมเดลส่งคำสั่ง terminal ที่ไม่ถูกต้อง"); }
       if (typeof args !== "object" || args === null || !("command" in args) || typeof args.command !== "string") {
         throw new Error("โมเดลส่งคำสั่ง terminal ที่ไม่ถูกต้อง");
       }
-      const response = await fetch("/api/e2b", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: args.command }),
@@ -134,6 +153,7 @@ export default function Home() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
   const [mode, setMode] = useState<ModelMode>("puter-luna");
+  const [terminalBackend, setTerminalBackend] = useState<TerminalBackend>("e2b");
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalBusy, setTerminalBusy] = useState(false);
@@ -189,7 +209,7 @@ export default function Home() {
           content = getPuterReply(await window.puter.ai.chat(conversation, false, { normalize: true }));
         } else {
           const model = selectedMode === "puter-codex" ? "openai/gpt-5.3-codex" : "openai/gpt-5.6-luna";
-          content = await getPuterReplyWithTools(conversation, model);
+          content = await getPuterReplyWithTools(conversation, model, terminalBackend);
         }
       }
       if (!content) throw new Error("โมเดลไม่ส่งข้อความตอบกลับ");
@@ -227,7 +247,7 @@ export default function Home() {
     setTerminalBusy(true);
     setTerminalCommand("");
     try {
-      const response = await fetch("/api/e2b", {
+      const response = await fetch(terminalBackend === "termux" ? "/api/termux" : "/api/e2b", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command }),
@@ -242,11 +262,12 @@ export default function Home() {
       const output = typeof data === "object" && data !== null && "output" in data && typeof data.output === "string"
         ? data.output
         : "No output";
-      setTerminalEntries((entries) => [...entries, { command, output }].slice(-20));
+      setTerminalEntries((entries) => [...entries, { command, output, backend: terminalBackend }].slice(-20));
     } catch (error) {
       setTerminalEntries((entries) => [...entries, {
         command,
         output: error instanceof Error ? `Error: ${error.message}` : "Error: command failed",
+        backend: terminalBackend,
       }].slice(-20));
     } finally {
       setTerminalBusy(false);
@@ -293,16 +314,19 @@ export default function Home() {
           </div>
         </header>
 
-        {terminalOpen && <aside className="terminal-panel" aria-label="E2B terminal">
+        {terminalOpen && <aside className="terminal-panel" aria-label={`${terminalBackend === "termux" ? "Termux" : "E2B"} terminal`}>
           <div className="terminal-heading">
-            <strong>E2B terminal</strong>
+            <select aria-label="Terminal backend" className="model-select" value={terminalBackend} onChange={(event) => setTerminalBackend(event.target.value as TerminalBackend)} disabled={terminalBusy || busy}>
+              <option value="e2b">E2B sandbox</option>
+              <option value="termux">Termux device</option>
+            </select>
             <button type="button" className="terminal-close" onClick={() => setTerminalOpen(false)} aria-label="Close terminal">×</button>
           </div>
-          <p className="terminal-note">แต่ละคำสั่งทำงานใน sandbox ใหม่ ไฟล์และสถานะ shell จะไม่ต่อเนื่องข้ามคำสั่ง</p>
+          <p className="terminal-note">{terminalBackend === "termux" ? "คำสั่งจะทำงานบนเครื่อง Android จริง ผ่าน Termux MCP ในเครื่อง" : "แต่ละคำสั่งทำงานใน sandbox ใหม่ ไฟล์และสถานะ shell จะไม่ต่อเนื่องข้ามคำสั่ง"}</p>
           <div className="terminal-output" aria-live="polite">
             {terminalEntries.length === 0 && <span className="terminal-placeholder">พร้อมรับคำสั่ง · E2B MCP {backend === "online" ? "online" : backend}</span>}
             {terminalEntries.map((entry, index) => <div className="terminal-entry" key={`${index}-${entry.command}`}>
-              <code className="terminal-command">$ {entry.command}</code>
+              <code className="terminal-command">[{entry.backend === "termux" ? "Termux" : "E2B"}] $ {entry.command}</code>
               <pre>{entry.output || "(no output)"}</pre>
             </div>)}
             {terminalBusy && <div className="terminal-running">กำลังรันคำสั่ง…</div>}

@@ -1,0 +1,22 @@
+[server]
+host = "127.0.0.1"
+port = 8080
+# Provide OPENSANDBOX_SERVER_API_KEY through the environment before exposing this server.
+
+[proxy]
+resolve_internal = true
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd:v1.1.0"
+
+[docker]
+network_mode = "bridge"
+no_new_privileges = true
+
+[storage]
+allowed_host_paths = ["/var/lib/opensandbox/volumes"]
+
+[store]
+type = "sqlite"
+path = "~/.opensandbox/opensandbox.db"
