@@ -1,129 +1,108 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import {
-  useWidgetProps,
-  useMaxHeight,
-  useDisplayMode,
-  useRequestDisplayMode,
-  useIsChatGptApp,
-} from "./hooks";
+import { FormEvent, useEffect, useRef, useState } from "react";
+
+type Message = { role: "user" | "assistant"; content: string };
 
 export default function Home() {
-  const toolOutput = useWidgetProps<{
-    name?: string;
-    result?: { structuredContent?: { name?: string } };
-  }>();
-  const maxHeight = useMaxHeight() ?? undefined;
-  const displayMode = useDisplayMode();
-  const requestDisplayMode = useRequestDisplayMode();
-  const isChatGptApp = useIsChatGptApp();
+  const [messages, setMessages] = useState<Message[]>([
+    { role: "assistant", content: "สวัสดีครับ 👋 ผมพร้อมทำงานแล้ว มีอะไรให้ช่วยวันนี้?" },
+  ]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [backend, setBackend] = useState<"checking" | "online" | "offline">("checking");
+  const endRef = useRef<HTMLDivElement>(null);
 
-  const name = toolOutput?.result?.structuredContent?.name || toolOutput?.name;
+  useEffect(() => {
+    fetch("/api/backend")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then(() => setBackend("online"))
+      .catch(() => setBackend("offline"));
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, busy]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || busy) return;
+
+    const next = [...messages, { role: "user" as const, content: text }];
+    setMessages(next);
+    setInput("");
+    setBusy(true);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      setMessages((m) => [...m, { role: "assistant", content: data.content }]);
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content:
+            err instanceof Error
+              ? `เชื่อมต่อโมเดลไม่ได้: ${err.message}`
+              : "เชื่อมต่อโมเดลไม่ได้",
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div
-      className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center p-8 pb-20 gap-16 sm:p-20"
-      style={{
-        maxHeight,
-        height: displayMode === "fullscreen" ? maxHeight : undefined,
-      }}
-    >
-      {displayMode !== "fullscreen" && (
-        <button
-          aria-label="Enter fullscreen"
-          className="fixed top-4 right-4 z-50 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-lg ring-1 ring-slate-900/10 dark:ring-white/10 p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-          onClick={() => requestDisplayMode("fullscreen")}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-            />
-          </svg>
+    <main className="chat-shell">
+      <aside className="sidebar">
+        <button className="new-chat" onClick={() => setMessages([{ role: "assistant", content: "เริ่มแชตใหม่ได้เลยครับ ✨" }])}>
+          <span>＋</span> New chat
         </button>
-      )}
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        {!isChatGptApp && (
-          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-3 w-full">
-            <div className="flex items-center gap-3">
-              <svg
-                className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-blue-900 dark:text-blue-100 font-medium">
-                  This app relies on data from a ChatGPT session.
-                </p>
-                <p className="text-sm text-blue-900 dark:text-blue-100 font-medium">
-                  No{" "}
-                  <a
-                    href="https://developers.openai.com/apps-sdk/reference"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:no-underline font-mono bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded"
-                  >
-                    window.openai
-                  </a>{" "}
-                  property detected
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Welcome to the ChatGPT Apps SDK Next.js Starter
-          </li>
-          <li className="mb-2 tracking-[-.01em]">
-            Name returned from tool call: {name ?? "..."}
-          </li>
-          <li className="mb-2 tracking-[-.01em]">MCP server path: /mcp</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <Link
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            prefetch={false}
-            href="/custom-page"
-          >
-            Visit another page
-          </Link>
-          <a
-            href="https://vercel.com/templates/ai/chatgpt-app-with-next-js"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-          >
-            Deploy on Vercel
-          </a>
+        <div className="sidebar-label">Your AI</div>
+        <div className="model-card">
+          <div className="model-icon">✦</div>
+          <div><strong>My AI</strong><small>Custom model</small></div>
+          <span className="dot" />
         </div>
-      </main>
-    </div>
+        <div className="sidebar-bottom">
+          <div className="status-row"><span className={`status-dot ${backend}`} /> Backend {backend === "online" ? "online" : backend === "offline" ? "offline" : "checking"}</div>
+          <div className="muted">E2B tools ready</div>
+        </div>
+      </aside>
+
+      <section className="chat">
+        <header className="topbar">
+          <div className="brand"><div className="brand-mark">✦</div><span>My GPT</span></div>
+          <button className="icon-button" aria-label="More options">•••</button>
+        </header>
+
+        <div className="messages">
+          {messages.map((m, i) => (
+            <div key={i} className={`message-row ${m.role}`}>
+              {m.role === "assistant" && <div className="avatar">✦</div>}
+              <div className={`bubble ${m.role}`}>{m.content}</div>
+            </div>
+          ))}
+          {busy && <div className="message-row assistant"><div className="avatar">✦</div><div className="bubble assistant typing"><i/><i/><i/></div></div>}
+          <div ref={endRef} />
+        </div>
+
+        <div className="composer-wrap">
+          <form className="composer" onSubmit={send}>
+            <button type="button" className="attach" aria-label="Attach">＋</button>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Message My GPT..." disabled={busy} />
+            <button type="submit" className="send" disabled={!input.trim() || busy} aria-label="Send">↑</button>
+          </form>
+          <p className="disclaimer">My GPT can make mistakes. Check important information.</p>
+        </div>
+      </section>
+    </main>
   );
 }
