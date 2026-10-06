@@ -5,7 +5,7 @@ import Script from "next/script";
 import { useWidgetProps } from "./hooks/use-widget-props";
 
 type Message = { role: "user" | "assistant"; content: string };
-type ModelMode = "puter" | "puter-codex" | "codex";
+type ModelMode = "puter" | "puter-codex" | "puter-luna" | "codex";
 type RetryRequest = { messages: Message[]; mode: ModelMode };
 type BackendStatus = "checking" | "online" | "offline";
 
@@ -53,7 +53,7 @@ export default function Home() {
   const [backend, setBackend] = useState<BackendStatus>("checking");
   const [chatError, setChatError] = useState<string | null>(null);
   const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
-  const [mode, setMode] = useState<ModelMode>("puter");
+  const [mode, setMode] = useState<ModelMode>("puter-luna");
   const endRef = useRef<HTMLDivElement>(null);
 
   const checkBackend = useCallback(async () => {
@@ -103,7 +103,11 @@ export default function Home() {
         }
         const result = await window.puter.ai.chat(conversation, false, {
           normalize: true,
-          ...(selectedMode === "puter-codex" ? { model: "openai/gpt-5.3-codex" } : {}),
+          ...(selectedMode === "puter-codex"
+            ? { model: "openai/gpt-5.3-codex" }
+            : selectedMode === "puter-luna"
+              ? { model: "openai/gpt-5.6-luna" }
+              : {}),
         });
         content = getPuterReply(result);
       }
@@ -145,7 +149,7 @@ export default function Home() {
         <div className="sidebar-label">Your AI</div>
         <div className="model-card">
           <div className="model-icon">✦</div>
-          <div><strong>My AI</strong><small>{mode === "puter" ? "Puter AI" : mode === "puter-codex" ? "Puter Codex" : "Codex · E2B tools"}</small></div>
+          <div><strong>My AI</strong><small>{mode === "puter" ? "Puter AI" : mode === "puter-codex" ? "Puter Codex" : mode === "puter-luna" ? "Puter Luna" : "Codex · E2B tools"}</small></div>
           <span className="dot" />
         </div>
         <div className="sidebar-bottom">
@@ -165,6 +169,7 @@ export default function Home() {
             <select id="model-mode" className="model-select" value={mode} onChange={(event) => setMode(event.target.value as ModelMode)} disabled={busy}>
               <option value="puter">Puter AI</option>
               <option value="puter-codex">Puter Codex</option>
+              <option value="puter-luna">Puter Luna</option>
               <option value="codex">Codex · E2B</option>
             </select>
             <button className="icon-button" aria-label="More options unavailable" title="More options are not available yet" disabled>•••</button>
@@ -185,7 +190,7 @@ export default function Home() {
         <div className="composer-wrap">
           <form className="composer" onSubmit={send}>
             <button type="button" className="attach" aria-label="Attachments unavailable" title="Attachments are not available yet" disabled>＋</button>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={mode === "puter" ? "Message My GPT..." : "Message Codex..."} maxLength={20_000} disabled={busy} />
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={mode === "puter-codex" ? "Message Codex..." : mode === "puter-luna" ? "Message Luna..." : "Message My GPT..."} maxLength={20_000} disabled={busy} />
             <button type="submit" className="send" disabled={!input.trim() || busy} aria-label="Send">↑</button>
           </form>
           {chatError && <div className="chat-error" role="alert">
