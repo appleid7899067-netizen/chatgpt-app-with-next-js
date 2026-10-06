@@ -33,6 +33,22 @@ button { cursor:pointer; }
 .mode-label { color:var(--muted); font-size:12px; }
 .model-select { border:1px solid #dedede; border-radius:9px; background:#fff; padding:7px 10px; color:var(--text); font-size:12px; }
 .model-select:disabled { opacity:.6; cursor:wait; }
+.terminal-toggle { border:1px solid #dedede; border-radius:9px; background:#fff; padding:7px 10px; color:var(--text); font-size:12px; }
+.terminal-panel { position:fixed; z-index:20; top:70px; right:18px; bottom:105px; width:min(420px,calc(100vw - 36px)); display:flex; flex-direction:column; border:1px solid #303030; border-radius:14px; background:#111; color:#eee; box-shadow:0 12px 36px #0003; overflow:hidden; }
+.terminal-heading { display:flex; align-items:center; justify-content:space-between; padding:13px 15px 7px; font-size:13px; }
+.terminal-close { border:0; background:transparent; color:#bbb; font-size:22px; line-height:1; }
+.terminal-note { margin:0; padding:0 15px 11px; color:#a8a8a8; font-size:11px; line-height:1.5; }
+.terminal-output { flex:1; overflow:auto; padding:12px 14px; border-top:1px solid #292929; border-bottom:1px solid #292929; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.terminal-placeholder { color:#858585; }
+.terminal-entry { margin-bottom:14px; }
+.terminal-command { display:block; color:#a8e6a3; white-space:pre-wrap; overflow-wrap:anywhere; }
+.terminal-entry pre { margin:5px 0 0; color:#ddd; white-space:pre-wrap; overflow-wrap:anywhere; }
+.terminal-running { color:#bbb; padding:5px 0; }
+.terminal-form { display:flex; align-items:center; gap:8px; padding:10px; }
+.terminal-form > span { color:#a8e6a3; font-family:monospace; }
+.terminal-form input { min-width:0; flex:1; border:0; outline:0; background:transparent; color:#fff; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.terminal-form button { border:1px solid #555; border-radius:7px; background:#252525; color:#fff; padding:6px 9px; font-size:11px; }
+.terminal-form button:disabled { cursor:not-allowed; opacity:.45; }
 .icon-button { border:0; background:transparent; color:#666; padding:8px 10px; border-radius:8px; }
 .icon-button:hover { background:#f3f3f3; }
 .icon-button:disabled { opacity:.5; cursor:not-allowed; }
@@ -64,4 +80,7 @@ button { cursor:pointer; }
   .composer-wrap { left:0; padding:12px 12px 10px; }
   .messages { padding:24px 15px 125px; }
   .topbar { padding:0 15px; }
+  .terminal-panel { top:66px; right:8px; bottom:106px; width:calc(100vw - 16px); }
+  .mode-label { display:none; }
+  .terminal-toggle { padding:7px 8px; }
 }
