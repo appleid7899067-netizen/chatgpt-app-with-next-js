@@ -29,6 +29,10 @@ button { cursor:pointer; }
 .brand { display:flex; align-items:center; gap:10px; font-weight:700; }
 .widget-context { color:var(--muted); font-size:12px; font-weight:400; }
 .brand-mark { width:27px; height:27px; border-radius:8px; }
+.topbar-actions { display:flex; align-items:center; gap:8px; }
+.mode-label { color:var(--muted); font-size:12px; }
+.model-select { border:1px solid #dedede; border-radius:9px; background:#fff; padding:7px 10px; color:var(--text); font-size:12px; }
+.model-select:disabled { opacity:.6; cursor:wait; }
 .icon-button { border:0; background:transparent; color:#666; padding:8px 10px; border-radius:8px; }
 .icon-button:hover { background:#f3f3f3; }
 .icon-button:disabled { opacity:.5; cursor:not-allowed; }

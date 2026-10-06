@@ -5,6 +5,8 @@ import Script from "next/script";
 import { useWidgetProps } from "./hooks/use-widget-props";
 
 type Message = { role: "user" | "assistant"; content: string };
+type ModelMode = "puter" | "codex";
+type RetryRequest = { messages: Message[]; mode: ModelMode };
 type BackendStatus = "checking" | "online" | "offline";
 
 declare global {
@@ -50,7 +52,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [backend, setBackend] = useState<BackendStatus>("checking");
   const [chatError, setChatError] = useState<string | null>(null);
-  const [retryMessages, setRetryMessages] = useState<Message[] | null>(null);
+  const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
+  const [mode, setMode] = useState<ModelMode>("puter");
   const endRef = useRef<HTMLDivElement>(null);
 
   const checkBackend = useCallback(async () => {
@@ -72,25 +75,46 @@ export default function Home() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  async function requestReply(conversation: Message[]) {
+  async function requestReply(conversation: Message[], selectedMode: ModelMode = mode) {
     setBusy(true);
     setChatError(null);
 
     try {
-      if (!window.puter) {
-        throw new Error("Puter.js ยังโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง");
+      let content: string | null = null;
+      if (selectedMode === "codex") {
+        const response = await fetch("/api/codex", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: conversation }),
+        });
+        const data: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const error = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Codex request failed";
+          throw new Error(error);
+        }
+        content = typeof data === "object" && data !== null && "content" in data && typeof data.content === "string"
+          ? data.content.trim()
+          : null;
+      } else {
+        if (!window.puter) {
+          throw new Error("Puter.js ยังโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง");
+        }
+        const result = await window.puter.ai.chat(conversation, false, { normalize: true });
+        content = getPuterReply(result);
       }
-      const result = await window.puter.ai.chat(conversation, false, { normalize: true });
-      const content = getPuterReply(result);
       if (!content) throw new Error("โมเดลไม่ส่งข้อความตอบกลับ");
       setMessages([...conversation, { role: "assistant", content }]);
-      setRetryMessages(null);
+      setRetryRequest(null);
     } catch (err) {
-      setRetryMessages(conversation);
+      setRetryRequest({ messages: conversation, mode: selectedMode });
       setChatError(
         err instanceof Error
           ? err.message
-          : "Puter ทำงานไม่สำเร็จ กรุณาล็อกอินหรืออนุญาตการใช้งาน แล้วลองอีกครั้ง"
+          : selectedMode === "puter"
+            ? "Puter ทำงานไม่สำเร็จ กรุณาล็อกอินหรืออนุญาตการใช้งาน แล้วลองอีกครั้ง"
+            : "Codex ทำงานไม่สำเร็จ กรุณาลองอีกครั้ง"
       );
     } finally {
       setBusy(false);
@@ -105,20 +129,20 @@ export default function Home() {
     const next = [...messages, { role: "user" as const, content: text }];
     setMessages(next);
     setInput("");
-    await requestReply(next);
+    await requestReply(next, mode);
   }
 
   return (
     <main className="chat-shell">
       <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
       <aside className="sidebar">
-        <button className="new-chat" disabled={busy} onClick={() => { setMessages([{ role: "assistant", content: "เริ่มแชตใหม่ได้เลยครับ ✨" }]); setChatError(null); setRetryMessages(null); }}>
+        <button className="new-chat" disabled={busy} onClick={() => { setMessages([{ role: "assistant", content: "เริ่มแชตใหม่ได้เลยครับ ✨" }]); setChatError(null); setRetryRequest(null); }}>
           <span>＋</span> New chat
         </button>
         <div className="sidebar-label">Your AI</div>
         <div className="model-card">
           <div className="model-icon">✦</div>
-          <div><strong>My AI</strong><small>Puter AI</small></div>
+          <div><strong>My AI</strong><small>{mode === "puter" ? "Puter AI" : "Codex · E2B tools"}</small></div>
           <span className="dot" />
         </div>
         <div className="sidebar-bottom">
@@ -133,7 +157,14 @@ export default function Home() {
       <section className="chat">
         <header className="topbar">
           <div className="brand"><div className="brand-mark">✦</div><span>My GPT</span>{widgetName && <small className="widget-context">For {widgetName}</small>}</div>
-          <button className="icon-button" aria-label="More options unavailable" title="More options are not available yet" disabled>•••</button>
+          <div className="topbar-actions">
+            <label className="mode-label" htmlFor="model-mode">Model</label>
+            <select id="model-mode" className="model-select" value={mode} onChange={(event) => setMode(event.target.value as ModelMode)} disabled={busy}>
+              <option value="puter">Puter AI</option>
+              <option value="codex">Codex · E2B</option>
+            </select>
+            <button className="icon-button" aria-label="More options unavailable" title="More options are not available yet" disabled>•••</button>
+          </div>
         </header>
 
         <div className="messages">
@@ -150,12 +181,12 @@ export default function Home() {
         <div className="composer-wrap">
           <form className="composer" onSubmit={send}>
             <button type="button" className="attach" aria-label="Attachments unavailable" title="Attachments are not available yet" disabled>＋</button>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Message My GPT..." maxLength={20_000} disabled={busy} />
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={mode === "puter" ? "Message My GPT..." : "Message Codex..."} maxLength={20_000} disabled={busy} />
             <button type="submit" className="send" disabled={!input.trim() || busy} aria-label="Send">↑</button>
           </form>
           {chatError && <div className="chat-error" role="alert">
             <span>เชื่อมต่อโมเดลไม่ได้: {chatError}</span>
-            {retryMessages && <button type="button" onClick={() => void requestReply(retryMessages)} disabled={busy}>ลองอีกครั้ง</button>}
+            {retryRequest && <button type="button" onClick={() => void requestReply(retryRequest.messages, retryRequest.mode)} disabled={busy}>ลองอีกครั้ง</button>}
           </div>}
           <p className="disclaimer">My GPT can make mistakes. Check important information.</p>
         </div>
