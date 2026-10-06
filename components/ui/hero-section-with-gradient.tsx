@@ -10,7 +10,7 @@ import Link from "next/link";
 
 export default function HeroSection_05() {
   const gradientRef = useRef<HTMLDivElement>(null);
-  const transitionVariants = {
+  const transitionVariants: { item: Variants } = {
     item: {
       hidden: { opacity: 0, filter: "blur(12px)", y: 12 },
       visible: {
