@@ -5,7 +5,7 @@ import Script from "next/script";
 import { useWidgetProps } from "./hooks/use-widget-props";
 
 type Message = { role: "user" | "assistant"; content: string };
-type ModelMode = "puter" | "codex";
+type ModelMode = "puter" | "puter-codex" | "codex";
 type RetryRequest = { messages: Message[]; mode: ModelMode };
 type BackendStatus = "checking" | "online" | "offline";
 
@@ -16,7 +16,7 @@ declare global {
         chat: (
           messages: Message[],
           testMode?: boolean,
-          options?: { normalize?: boolean }
+          options?: { normalize?: boolean; model?: string }
         ) => Promise<unknown>;
       };
     };
@@ -101,7 +101,10 @@ export default function Home() {
         if (!window.puter) {
           throw new Error("Puter.js ยังโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง");
         }
-        const result = await window.puter.ai.chat(conversation, false, { normalize: true });
+        const result = await window.puter.ai.chat(conversation, false, {
+          normalize: true,
+          ...(selectedMode === "puter-codex" ? { model: "openai/gpt-5.3-codex" } : {}),
+        });
         content = getPuterReply(result);
       }
       if (!content) throw new Error("โมเดลไม่ส่งข้อความตอบกลับ");
@@ -112,7 +115,7 @@ export default function Home() {
       setChatError(
         err instanceof Error
           ? err.message
-          : selectedMode === "puter"
+          : selectedMode !== "codex"
             ? "Puter ทำงานไม่สำเร็จ กรุณาล็อกอินหรืออนุญาตการใช้งาน แล้วลองอีกครั้ง"
             : "Codex ทำงานไม่สำเร็จ กรุณาลองอีกครั้ง"
       );
@@ -142,7 +145,7 @@ export default function Home() {
         <div className="sidebar-label">Your AI</div>
         <div className="model-card">
           <div className="model-icon">✦</div>
-          <div><strong>My AI</strong><small>{mode === "puter" ? "Puter AI" : "Codex · E2B tools"}</small></div>
+          <div><strong>My AI</strong><small>{mode === "puter" ? "Puter AI" : mode === "puter-codex" ? "Puter Codex" : "Codex · E2B tools"}</small></div>
           <span className="dot" />
         </div>
         <div className="sidebar-bottom">
@@ -161,6 +164,7 @@ export default function Home() {
             <label className="mode-label" htmlFor="model-mode">Model</label>
             <select id="model-mode" className="model-select" value={mode} onChange={(event) => setMode(event.target.value as ModelMode)} disabled={busy}>
               <option value="puter">Puter AI</option>
+              <option value="puter-codex">Puter Codex</option>
               <option value="codex">Codex · E2B</option>
             </select>
             <button className="icon-button" aria-label="More options unavailable" title="More options are not available yet" disabled>•••</button>
