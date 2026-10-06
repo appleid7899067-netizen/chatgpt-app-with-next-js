@@ -40,13 +40,13 @@ export default function RootLayout({
 function NextChatSDKBootstrap({ baseUrl }: { baseUrl: string }) {
   return (
     <>
-      <base href={baseUrl}></base>
+      <base href={baseUrl || "/"}></base>
       <script>{`window.innerBaseUrl = ${JSON.stringify(baseUrl)}`}</script>
       <script>{`window.__isChatGptApp = typeof window.openai !== "undefined";`}</script>
       <script>
         {"(" +
           (() => {
-            const baseUrl = window.innerBaseUrl;
+            const baseUrl = window.innerBaseUrl || window.location.origin;
             const htmlElement = document.documentElement;
             const observer = new MutationObserver((mutations) => {
               mutations.forEach((mutation) => {

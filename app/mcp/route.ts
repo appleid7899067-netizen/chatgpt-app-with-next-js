@@ -3,7 +3,13 @@ import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 
 const getAppsSdkCompatibleHtml = async (baseUrl: string, path: string) => {
-  const result = await fetch(`${baseUrl}${path}`);
+  if (!baseUrl) {
+    throw new Error("Set APP_BASE_URL or a Vercel deployment URL to serve the MCP widget");
+  }
+  const result = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(10_000) });
+  if (!result.ok) {
+    throw new Error(`Unable to load MCP widget HTML (HTTP ${result.status})`);
+  }
   return await result.text();
 };
 
@@ -39,7 +45,7 @@ const handler = createMcpHandler(async (server) => {
     invoked: "Content loaded",
     html: html,
     description: "Displays the homepage content",
-    widgetDomain: "https://nextjs.org/docs",
+    widgetDomain: new URL(baseURL).origin,
   };
   server.registerResource(
     "content-widget",
@@ -58,7 +64,7 @@ const handler = createMcpHandler(async (server) => {
         {
           uri: uri.href,
           mimeType: "text/html+skybridge",
-          text: `<html>${contentWidget.html}</html>`,
+          text: contentWidget.html,
           _meta: {
             "openai/widgetDescription": contentWidget.description,
             "openai/widgetPrefersBorder": true,
@@ -74,7 +80,7 @@ const handler = createMcpHandler(async (server) => {
     {
       title: contentWidget.title,
       description:
-        "Fetch and display the homepage content with the name of the user",
+        "Display the homepage and show the supplied user's name in the widget.",
       inputSchema: {
         name: z.string().describe("The name of the user to display on the homepage"),
       },
